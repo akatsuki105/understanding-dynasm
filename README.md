@@ -10,6 +10,6 @@ http://luajit.org/git/luajit-2.0.git
 
 読んで理解したことはここにまとめてあります。
 
-## example
+## example/
 
 `DynASM`で処理する前のコード(`mandelbrot.c`)と処理した後のコード(`mandelbrot_x64.c`)を例として置いています。

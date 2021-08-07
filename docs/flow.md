@@ -138,6 +138,10 @@ end
 
 ## dostmt
 
+プリプロセスを実際に行われます。ここではオペコードを抽出して各オペコードに対応するハンドラを呼び出しています。
+
+ハンドラはアーキテクチャ依存なので、汎用的な処理フローはここが終点です。
+
 ```lua
 dostmt = function(stmt)
   -- 空行は無視
@@ -170,7 +174,7 @@ dostmt = function(stmt)
 
   -- 見つからない場合はエラー
   if not f then
-    if not g_arch then wfatal("first statement must be .arch") end
+    if not g_arch then wfatal("first statement must be .arch") end -- .archが最初にない場合はエラー
     -- Improve error report.
     for i=0,9 do
       if map_op[op.."_"..i] then werror("wrong number of parameters for `"..op.."'") end

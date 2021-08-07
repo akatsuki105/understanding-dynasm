@@ -11,6 +11,7 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "luajit-2.0/dynasm/dasm_proto.h"
 #include "luajit-2.0/dynasm/dasm_x86.h"
 #if _WIN32
@@ -22,8 +23,7 @@
 #endif
 #endif
 
-static void* link_and_encode(dasm_State** d)
-{
+static void* link_and_encode(dasm_State** d) {
   size_t sz;
   void* buf;
   dasm_link(d, &sz);
@@ -34,7 +34,10 @@ static void* link_and_encode(dasm_State** d)
 #endif
   dasm_encode(d, buf);
 #ifdef _WIN32
-  {DWORD dwOld; VirtualProtect(buf, sz, PAGE_EXECUTE_READ, &dwOld); }
+  {
+    DWORD dwOld;
+    VirtualProtect(buf, sz, PAGE_EXECUTE_READ, &dwOld);
+  }
 #else
   mprotect(buf, sz, PROT_READ | PROT_EXEC);
 #endif
@@ -44,8 +47,7 @@ static void* link_and_encode(dasm_State** d)
 #define TAPE_SIZE 30000
 #define MAX_NESTING 100
 
-typedef struct bf_state
-{
+typedef struct bf_state {
   unsigned char* tape;
   unsigned char (*get_ch)(struct bf_state*);
   void (*put_ch)(struct bf_state*, unsigned char);
@@ -53,8 +55,7 @@ typedef struct bf_state
 
 #define bad_program(s) exit(fprintf(stderr, "bad program near %.16s: %s\n", program, s))
 
-static void(* bf_compile(const char* program) )(bf_state_t*)
-{
+static void (*bf_compile(const char* program))(bf_state_t*) {
   unsigned loops[MAX_NESTING];
   int nloops = 0;
   int n;
@@ -71,105 +72,98 @@ static void(* bf_compile(const char* program) )(bf_state_t*)
   //|.arch x86
   //|.endif
   //|.section code
-#define DASM_SECTION_CODE	0
-#define DASM_MAXSECTION		1
+#define DASM_SECTION_CODE 0
+#define DASM_MAXSECTION 1
 #line 62 "main.c"
   dasm_init(&d, DASM_MAXSECTION);
   //|.globals lbl_
-enum {
-  lbl_bf_main,
-  lbl__MAX
-};
+  enum { lbl_bf_main, lbl__MAX };
 #line 64 "main.c"
   void* labels[lbl__MAX];
   dasm_setupglobal(&d, labels, lbl__MAX);
   //|.actionlist bf_actions
-static const unsigned char bf_actions[142] = {
-  254,0,248,10,83,65,84,65,85,65,86,80,73,137,252,252,73,139,156,253,36,233,
-  76,141,107,252,255,76,141,179,233,255,72,129,252,235,239,76,57,252,235,15,
-  135,244,247,72,129,195,239,248,1,255,72,129,195,239,76,57,252,243,15,134,
-  244,247,72,129,252,235,239,248,1,255,128,3,235,255,128,43,235,255,76,137,
-  231,65,252,255,148,253,36,233,136,3,255,72,15,182,3,76,137,231,72,137,198,
-  65,252,255,148,253,36,233,255,49,192,136,3,255,128,59,0,15,132,245,249,255,
-  128,59,0,15,133,245,249,255,88,65,94,65,93,65,92,91,195,255
-};
+  static const unsigned char bf_actions[142] = {254, 0,   248, 10,  83,  65,  84,  65,  85,  65,  86,  80,  73,  137, 252, 252, 73,  139, 156, 253, 36,  233, 76,  141, 107, 252, 255, 76,  141,
+                                                179, 233, 255, 72,  129, 252, 235, 239, 76,  57,  252, 235, 15,  135, 244, 247, 72,  129, 195, 239, 248, 1,   255, 72,  129, 195, 239, 76,  57,
+                                                252, 243, 15,  134, 244, 247, 72,  129, 252, 235, 239, 248, 1,   255, 128, 3,   235, 255, 128, 43,  235, 255, 76,  137, 231, 65,  252, 255, 148,
+                                                253, 36,  233, 136, 3,   255, 72,  15,  182, 3,   76,  137, 231, 72,  137, 198, 65,  252, 255, 148, 253, 36,  233, 255, 49,  192, 136, 3,   255,
+                                                128, 59,  0,   15,  132, 245, 249, 255, 128, 59,  0,   15,  133, 245, 249, 255, 88,  65,  94,  65,  93,  65,  92,  91,  195, 255};
 
 #line 67 "main.c"
   dasm_setup(&d, bf_actions);
   dasm_growpc(&d, npc);
   //|.if X64
-    //|.define aPtr, rbx
-    //|.define aState, r12
-    //|.if WIN
-      //|.define aTapeBegin, rsi
-      //|.define aTapeEnd, rdi
-      //|.define rArg1, rcx
-      //|.define rArg2, rdx
-    //|.else
-      //|.define aTapeBegin, r13
-      //|.define aTapeEnd, r14
-      //|.define rArg1, rdi
-      //|.define rArg2, rsi
-    //|.endif
-    //|.macro prepcall1, arg1
-      //| mov rArg1, arg1
-    //|.endmacro
-    //|.macro prepcall2, arg1, arg2
-      //| mov rArg1, arg1
-      //| mov rArg2, arg2
-    //|.endmacro
-    //|.define postcall, .nop
-    //|.macro prologue
-      //| push aPtr
-      //| push aState
-      //| push aTapeBegin
-      //| push aTapeEnd
-      //| push rax
-      //| mov aState, rArg1
-    //|.endmacro
-    //|.macro epilogue
-      //| pop rax
-      //| pop aTapeEnd
-      //| pop aTapeBegin
-      //| pop aState
-      //| pop aPtr
-      //| ret
-    //|.endmacro
+  //|.define aPtr, rbx
+  //|.define aState, r12
+  //|.if WIN
+  //|.define aTapeBegin, rsi
+  //|.define aTapeEnd, rdi
+  //|.define rArg1, rcx
+  //|.define rArg2, rdx
   //|.else
-    //|.define aPtr, ebx
-    //|.define aState, ebp
-    //|.define aTapeBegin, esi
-    //|.define aTapeEnd, edi
-    //|.macro prepcall1, arg1
-      //| push arg1
-    //|.endmacro
-    //|.macro prepcall2, arg1, arg2
-      //| push arg2
-      //| push arg1
-    //|.endmacro
-    //|.macro postcall, n
-      //| add esp, 4*n
-    //|.endmacro
-    //|.macro prologue
-      //| push aPtr
-      //| push aState
-      //| push aTapeBegin
-      //| push aTapeEnd
-      //| mov aState, [esp+20]
-    //|.endmacro
-    //|.macro epilogue
-      //| pop aTapeEnd
-      //| pop aTapeBegin
-      //| pop aState
-      //| pop aPtr
-      //| ret 4
-    //|.endmacro
+  //|.define aTapeBegin, r13
+  //|.define aTapeEnd, r14
+  //|.define rArg1, rdi
+  //|.define rArg2, rsi
+  //|.endif
+  //|.macro prepcall1, arg1
+  //| mov rArg1, arg1
+  //|.endmacro
+  //|.macro prepcall2, arg1, arg2
+  //| mov rArg1, arg1
+  //| mov rArg2, arg2
+  //|.endmacro
+  //|.define postcall, .nop
+  //|.macro prologue
+  //| push aPtr
+  //| push aState
+  //| push aTapeBegin
+  //| push aTapeEnd
+  //| push rax
+  //| mov aState, rArg1
+  //|.endmacro
+  //|.macro epilogue
+  //| pop rax
+  //| pop aTapeEnd
+  //| pop aTapeBegin
+  //| pop aState
+  //| pop aPtr
+  //| ret
+  //|.endmacro
+  //|.else
+  //|.define aPtr, ebx
+  //|.define aState, ebp
+  //|.define aTapeBegin, esi
+  //|.define aTapeEnd, edi
+  //|.macro prepcall1, arg1
+  //| push arg1
+  //|.endmacro
+  //|.macro prepcall2, arg1, arg2
+  //| push arg2
+  //| push arg1
+  //|.endmacro
+  //|.macro postcall, n
+  //| add esp, 4*n
+  //|.endmacro
+  //|.macro prologue
+  //| push aPtr
+  //| push aState
+  //| push aTapeBegin
+  //| push aTapeEnd
+  //| mov aState, [esp+20]
+  //|.endmacro
+  //|.macro epilogue
+  //| pop aTapeEnd
+  //| pop aTapeBegin
+  //| pop aState
+  //| pop aPtr
+  //| ret 4
+  //|.endmacro
   //|.endif
 
   //|.type state, bf_state_t, aState
-#define Dt1(_V) (int)(ptrdiff_t)&(((bf_state_t *)0)_V)
+#define Dt1(_V) (int)(ptrdiff_t) & (((bf_state_t*)0)_V)
 #line 139 "main.c"
-  
+
   dasm_State** Dst = &d;
   //|.code
   dasm_put(Dst, 0);
@@ -179,116 +173,110 @@ static const unsigned char bf_actions[142] = {
   //| mov aPtr, state->tape
   //| lea aTapeBegin, [aPtr-1]
   //| lea aTapeEnd, [aPtr+TAPE_SIZE-1]
-  dasm_put(Dst, 2, Dt1(->tape), TAPE_SIZE-1);
+  dasm_put(Dst, 2, Dt1(->tape), TAPE_SIZE - 1);
 #line 147 "main.c"
-  for(;;) {
-    switch(*program++) {
-    case '<':
-      for(n = 1; *program == '<'; ++n, ++program);
-      //| sub aPtr, n%TAPE_SIZE
-      //| cmp aPtr, aTapeBegin
-      //| ja >1
-      //| add aPtr, TAPE_SIZE
-      //|1:
-      dasm_put(Dst, 32, n%TAPE_SIZE, TAPE_SIZE);
+  for (;;) {
+    switch (*program++) {
+      case '<':
+        for (n = 1; *program == '<'; ++n, ++program)
+          ;
+        //| sub aPtr, n%TAPE_SIZE
+        //| cmp aPtr, aTapeBegin
+        //| ja >1
+        //| add aPtr, TAPE_SIZE
+        //|1:
+        dasm_put(Dst, 32, n % TAPE_SIZE, TAPE_SIZE);
 #line 156 "main.c"
-      break;
-    case '>':
-      for(n = 1; *program == '>'; ++n, ++program);
-      //| add aPtr, n%TAPE_SIZE
-      //| cmp aPtr, aTapeEnd
-      //| jbe >1
-      //| sub aPtr, TAPE_SIZE
-      //|1:
-      dasm_put(Dst, 52, n%TAPE_SIZE, TAPE_SIZE);
+        break;
+      case '>':
+        for (n = 1; *program == '>'; ++n, ++program)
+          ;
+        //| add aPtr, n%TAPE_SIZE
+        //| cmp aPtr, aTapeEnd
+        //| jbe >1
+        //| sub aPtr, TAPE_SIZE
+        //|1:
+        dasm_put(Dst, 52, n % TAPE_SIZE, TAPE_SIZE);
 #line 164 "main.c"
-      break;
-    case '+':
-      for(n = 1; *program == '+'; ++n, ++program);
-      //| add byte [aPtr], n
-      dasm_put(Dst, 72, n);
+        break;
+      case '+':
+        for (n = 1; *program == '+'; ++n, ++program)
+          ;
+        //| add byte [aPtr], n
+        dasm_put(Dst, 72, n);
 #line 168 "main.c"
-      break;
-    case '-':
-      for(n = 1; *program == '-'; ++n, ++program);
-      //| sub byte [aPtr], n
-      dasm_put(Dst, 76, n);
+        break;
+      case '-':
+        for (n = 1; *program == '-'; ++n, ++program)
+          ;
+        //| sub byte [aPtr], n
+        dasm_put(Dst, 76, n);
 #line 172 "main.c"
-      break;
-    case ',':
-      //| prepcall1 aState
-      //| call aword state->get_ch
-      //| postcall 1
-      //| mov byte [aPtr], al
-      dasm_put(Dst, 80, Dt1(->get_ch));
-#line 178 "main.c"
-      break;
-    case '.':
-      //| movzx r0, byte [aPtr]
-      //| prepcall2 aState, r0
-      //| call aword state->put_ch
-      //| postcall 2
-      dasm_put(Dst, 93, Dt1(->put_ch));
-#line 184 "main.c"
-      break;
-    case '[':
-      if(nloops == MAX_NESTING)
-        bad_program("Nesting too deep");
-      if(program[0] == '-' && program[1] == ']') {
-        program += 2;
-        //| xor eax, eax
+        break;
+      case ',':
+        //| prepcall1 aState
+        //| call aword state->get_ch
+        //| postcall 1
         //| mov byte [aPtr], al
-        dasm_put(Dst, 111);
+        dasm_put(Dst, 80, Dt1(->get_ch));
+#line 178 "main.c"
+        break;
+      case '.':
+        //| movzx r0, byte [aPtr]
+        //| prepcall2 aState, r0
+        //| call aword state->put_ch
+        //| postcall 2
+        dasm_put(Dst, 93, Dt1(->put_ch));
+#line 184 "main.c"
+        break;
+      case '[':
+        if (nloops == MAX_NESTING) bad_program("Nesting too deep");
+        if (program[0] == '-' && program[1] == ']') {
+          program += 2;
+          //| xor eax, eax
+          //| mov byte [aPtr], al
+          dasm_put(Dst, 111);
 #line 192 "main.c"
-      } else {
-        if(nextpc == npc) {
-          npc *= 2;
-          dasm_growpc(&d, npc);
-        }
-        //| cmp byte [aPtr], 0
-        //| jz =>nextpc+1
-        //|=>nextpc:
-        dasm_put(Dst, 116, nextpc+1, nextpc);
+        } else {
+          if (nextpc == npc) {
+            npc *= 2;
+            dasm_growpc(&d, npc);
+          }
+          //| cmp byte [aPtr], 0
+          //| jz =>nextpc+1
+          //|=>nextpc:
+          dasm_put(Dst, 116, nextpc + 1, nextpc);
 #line 200 "main.c"
-        loops[nloops++] = nextpc;
-        nextpc += 2;
-      }
-      break;
-    case ']':
-      if(nloops == 0)
-        bad_program("] without matching [");
-      --nloops;
-      //| cmp byte [aPtr], 0
-      //| jnz =>loops[nloops]
-      //|=>loops[nloops]+1:
-      dasm_put(Dst, 124, loops[nloops], loops[nloops]+1);
+          loops[nloops++] = nextpc;
+          nextpc += 2;
+        }
+        break;
+      case ']':
+        if (nloops == 0) bad_program("] without matching [");
+        --nloops;
+        //| cmp byte [aPtr], 0
+        //| jnz =>loops[nloops]
+        //|=>loops[nloops]+1:
+        dasm_put(Dst, 124, loops[nloops], loops[nloops] + 1);
 #line 211 "main.c"
-      break;
-    case 0:
-      if(nloops != 0)
-        program = "<EOF>", bad_program("[ without matching ]");
-      //| epilogue
-      dasm_put(Dst, 132);
+        break;
+      case 0:
+        if (nloops != 0) program = "<EOF>", bad_program("[ without matching ]");
+        //| epilogue
+        dasm_put(Dst, 132);
 #line 216 "main.c"
-      link_and_encode(&d);
-      dasm_free(&d);
-      return (void(*)(bf_state_t*))labels[lbl_bf_main];
+        link_and_encode(&d);
+        dasm_free(&d);
+        return (void (*)(bf_state_t*))labels[lbl_bf_main];
     }
   }
 }
 
-static void bf_putchar(bf_state_t* s, unsigned char c)
-{
-  putchar((int)c);
-}
+static void bf_putchar(bf_state_t* s, unsigned char c) { putchar((int)c); }
 
-static unsigned char bf_getchar(bf_state_t* s)
-{
-  return (unsigned char)getchar();
-}
+static unsigned char bf_getchar(bf_state_t* s) { return (unsigned char)getchar(); }
 
-static void bf_run(const char* program)
-{
+static void bf_run(const char* program) {
   bf_state_t state;
   unsigned char tape[TAPE_SIZE] = {0};
   state.tape = tape;
@@ -297,13 +285,12 @@ static void bf_run(const char* program)
   bf_compile(program)(&state);
 }
 
-int main(int argc, char** argv)
-{
-  if(argc == 2) {
+int main(int argc, char** argv) {
+  if (argc == 2) {
     long sz;
     char* program;
     FILE* f = fopen(argv[1], "r");
-    if(!f) {
+    if (!f) {
       fprintf(stderr, "Cannot open %s\n", argv[1]);
       return 1;
     }

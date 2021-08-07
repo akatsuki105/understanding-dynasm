@@ -839,7 +839,7 @@ dostmt = function(stmt)
 
   -- 見つからない場合はエラー
   if not f then
-    if not g_arch then wfatal("first statement must be .arch") end
+    if not g_arch then wfatal("first statement must be .arch") end -- .archが最初にない場合はエラー
     -- Improve error report.
     for i=0,9 do
       if map_op[op.."_"..i] then werror("wrong number of parameters for `"..op.."'") end
