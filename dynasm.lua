@@ -56,7 +56,7 @@ local stdin, stdout, stderr = io.stdin, io.stdout, io.stderr
 
 ------------------------------------------------------------------------------
 
--- Program options.
+-- プログラムのオプション
 local g_opt = {}
 
 -- Global state for current file.
@@ -75,14 +75,15 @@ local function wline(line, needindent)
   g_synclineno = g_synclineno + 1
 end
 
--- Write assembler line as a comment, if requestd.
+-- 必要があったときに、コメントとしてアセンブリを書き込む
 local function wcomment(aline)
   if g_opt.comment then
     wline(g_opt.comment..aline..g_opt.endcomment, true)
   end
 end
 
--- Resync CPP line numbers.
+-- Resync CPP line numbers.  
+-- g_synclineno と g_lineno を合わせる
 local function wsync()
   if g_synclineno ~= g_lineno and g_opt.cpp then
     wline("#line "..g_lineno..' "'..g_fname..'"')
@@ -171,7 +172,9 @@ end
 
 -- Core pseudo-opcodes.
 local map_coreop = {}
--- Dummy opcode map. Replaced by arch-specific map.
+
+-- オペコードに対するハンドラテーブル  
+-- 各アーキテクチャごとにテーブルの内容は異なる
 local map_op = {}
 
 -- Forward declarations.
@@ -180,18 +183,24 @@ local readfile
 
 ------------------------------------------------------------------------------
 
--- Map for defines (initially empty, chains to arch-specific map).
+-- .defineディレクティブによる対応関係を記録しておくマップ
 local map_def = {}
 
--- Pseudo-opcode to define a substitution.
+-- .define ディレクティブ(Cの#defineみたいなやつ)にあったときの処理: `.define シンボル 内容`
 map_coreop[".define_2"] = function(params, nparams)
-  if not params then return nparams == 1 and "name" or "name, subst" end
+  if not params then
+    return nparams == 1 and "name" or "name, subst"
+  end
   local name, def = params[1], params[2] or "1"
-  if not match(name, "^[%a_][%w_]*$") then werror("bad or duplicate define") end
+  if not match(name, "^[%a_][%w_]*$") then
+    -- 不正なシンボル名
+    werror("bad or duplicate define")
+  end
   map_def[name] = def
 end
 map_coreop[".define_1"] = map_coreop[".define_2"]
 
+-- opt_map + Defineでopt_map.D?  
 -- Define a substitution on the command line.
 function opt_map.D(args)
   local namesubst = optparam(args)
@@ -205,6 +214,7 @@ function opt_map.D(args)
   end
 end
 
+-- opt_map + Undefineでopt_map.U?  
 -- Undefine a substitution on the command line.
 function opt_map.U(args)
   local name = optparam(args)
@@ -218,18 +228,24 @@ end
 -- Helper for definesubst.
 local gotsubst
 
+-- wordが.defineで定義されているならそれを、定義されてないならwordをそのまま返す
 local function definesubst_one(word)
   local subst = map_def[word]
-  if subst then gotsubst = word; return subst else return word end
+  if subst then
+    gotsubst = word; return subst
+  else
+    return word
+  end
 end
 
--- Iteratively substitute defines.
+-- .defineで定義されたシンボルがあれば置換を行う
 local function definesubst(stmt)
-  -- Limit number of iterations.
+  -- 1文に.defineで定義したシンボルは100個まで
   for i=1,100 do
     gotsubst = false
+    -- gsubの3つ目の引数のdefinesubst_one: replがテーブル型もしくは関数型の場合、テーブルの要素の値もしくは関数の戻り値が文字列型であれば、それがそのまま置き換え文字列となります。数値型(FIXNUM)の場合は、文字列に変換したものが置き換え文字列になります。
     stmt = gsub(stmt, "#?[%w_]+", definesubst_one)
-    if not gotsubst then break end
+    if not gotsubst then break end -- もうない場合は終了
   end
   if gotsubst then wfatal("recursive define involving `"..gotsubst.."'") end
   return stmt
@@ -504,7 +520,10 @@ local cap_lineno, cap_name
 local cap_buffers = {}
 local cap_used = {}
 
--- Start a capture.
+-- .captureディレクティブ: キャプチャの開始  
+-- キャプチャの中では、出力ファイルに書き込まれるはずのものが、代わりに内部バッファに追加されます。  
+-- このバッファは名前で識別され、同じ名前の複数の .captureディレクティブが同じバッファに追加されます。  
+-- 内部バッファは、後で .dumpcaptureを使って出力ファイルに書き込まれる必要があります。
 map_coreop[".capture_1"] = function(params)
   if not params then return "name" end
   wflush()
@@ -524,7 +543,7 @@ map_coreop[".capture_1"] = function(params)
   g_synclineno = 0
 end
 
--- Stop a capture.
+-- .endcaptureディレクトリ: キャプチャを終了する
 map_coreop[".endcapture_0"] = function(params)
   wflush()
   if not cap_name then wfatal(".endcapture without a valid .capture") end
@@ -534,7 +553,7 @@ map_coreop[".endcapture_0"] = function(params)
   g_synclineno = 0
 end
 
--- Dump a capture buffer.
+-- .dumpcaptureディレクトリ: 引数で渡した名前に対応する.captureの内部バッファを出力ファイルに出力する
 map_coreop[".dumpcapture_1"] = function(params)
   if not params then return "name" end
   wflush()
@@ -567,11 +586,10 @@ local function dumpcaptures(out, lvl)
   out:write("\n")
 end
 
--- Check for unfinished or unused captures.
+-- 終了していないまたは、不使用のキャプチャがあるかチェックする
 local function checkcaptures()
   if cap_name then
-    wprinterr(g_fname, ":", cap_lineno,
-	      ": error: unfinished .capture `", cap_name,"'\n")
+    wprinterr(g_fname, ":", cap_lineno, ": error: unfinished .capture `", cap_name,"'\n")
     return
   end
   for name in pairs(cap_buffers) do
@@ -627,7 +645,7 @@ if not require then
   end
 end
 
--- Load architecture-specific module.
+-- ここでアーキテクチャに対応するモジュールをロードしている
 local function loadarch(arch)
   if not match(arch, "^[%w_]+$") then return "bad arch name" end
   local ok, m_arch = pcall(require, "dasm_"..arch)
@@ -689,7 +707,7 @@ function opt_map.dumparch(args)
   exit(0)
 end
 
--- Pseudo-opcode to set the architecture.
+-- アーキテクチャを設定する .arch ディレクティブに対する処理  
 -- Only initially available (map_op is replaced when called).
 map_op[".arch_1"] = function(params)
   if not params then return "name" end
@@ -708,14 +726,20 @@ end
 
 ------------------------------------------------------------------------------
 
--- Dummy pseudo-opcode. Don't confuse '.nop' with 'nop'.
+-- 何もしない .nop ディレクティブに対する処理
 map_coreop[".nop_*"] = function(params)
-  if not params then return "[ignored...]" end
+  -- 引数がないとき
+  if not params then
+    return "[ignored...]"
+  end
 end
 
 -- Pseudo-opcodes to raise errors.
 map_coreop[".error_1"] = function(params)
-  if not params then return "message" end
+  -- 引数がないとき
+  if not params then
+    return "message"
+  end
   werror(params[1])
 end
 
@@ -782,40 +806,49 @@ local function splitstmt(stmt)
   return op, params
 end
 
--- Process a single statement.
+-- 文を1つ処理する
+-- doline から呼び出される
 dostmt = function(stmt)
-  -- Ignore empty statements.
+  -- 空行は無視
   if match(stmt, "^%s*$") then return end
 
   -- Capture macro defs before substitution.
   if mac_capture then return mac_capture(stmt) end
+
+  -- .defineによる置換を適用
   stmt = definesubst(stmt)
 
-  -- Emit C code without parsing the line.
-  if sub(stmt, 1, 1) == "|" then
-    local tail = sub(stmt, 2)
+  -- アセンブリ文のときにdasm_putなどの前に元のアセンブリを書き込む処理
+  if sub(stmt, 1, 1) == "|" then -- e.g. `| add aPtr, TAPE_SIZE`
+    local tail = sub(stmt, 2) -- e.g. `add aPtr, TAPE_SIZE`
     wflush()
-    if sub(tail, 1, 2) == "//" then wcomment(tail) else wline(tail, true) end
+    if sub(tail, 1, 2) == "//" then -- e.g. `// comment` (`元のstmtが | // comment`)
+      wcomment(tail)
+    else
+      wline(tail, true)
+    end
     return
   end
 
-  -- Split into (pseudo-)opcode and params.
+  -- オペコードとオペランドを分ける
   local op, params = splitstmt(stmt)
 
   -- Get opcode handler (matching # of parameters or generic handler).
+  -- オペコードハンドラをハンドラテーブルから取り出す
   local f = map_op[op.."_"..#params] or map_op[op.."_*"]
+
+  -- 見つからない場合はエラー
   if not f then
     if not g_arch then wfatal("first statement must be .arch") end
     -- Improve error report.
     for i=0,9 do
-      if map_op[op.."_"..i] then
-	werror("wrong number of parameters for `"..op.."'")
-      end
+      if map_op[op.."_"..i] then werror("wrong number of parameters for `"..op.."'") end
     end
     werror("unknown statement `"..op.."'")
   end
 
-  -- Call opcode handler or special handler for template strings.
+  -- ハンドラを呼び出す
+  -- テンプレート文字列の場合は特殊なハンドラを呼び出す
   if type(f) == "string" then
     map_op[".template__"](params, f)
   else
@@ -823,23 +856,26 @@ dostmt = function(stmt)
   end
 end
 
--- Process a single line.
+-- 1行処理する
 local function doline(line)
   if g_opt.flushline then wflush() end
 
-  -- Assembler line?
+  -- アセンブリを記述している行かどうか(パイプマークで判定)
+  -- indent: インデントを表すスペース文字列: "    "
+  -- aline: アセンブリ文字列 "| mov eax, foo+17"
   local indent, aline = match(line, "^(%s*)%|(.*)$")
   if not aline then
-    -- No, plain C code line, need to flush first.
+    -- 普通のCコードの場合はそのまま書き出して終了
     wflush()
     wsync()
     wline(line, false)
     return
   end
 
-  g_indent = indent -- Remember current line indentation.
+  g_indent = indent -- インデントを記憶しておく
 
   -- Emit C code (even from macros). Avoids echo and line parsing.
+  -- アセンブリをプリプロセスして、Cのコードにして書き出す
   if sub(aline, 1, 1) == "|" then
     if not mac_capture then
       wsync()
@@ -847,20 +883,22 @@ local function doline(line)
       wsync()
       wcomment(aline)
     end
-    dostmt(aline)
+    dostmt(aline) -- ここでプリプロセスを実際に行う
     return
   end
 
-  -- Echo assembler line as a comment.
+  -- プリプロセスする前のアセンブリをコメントとして出力する
+  -- 例: `//| xor eax, eax`
   if g_opt.comment then
     wsync()
     wcomment(aline)
   end
 
-  -- Strip assembler comments.
+  -- アセンブリに書いてあるコメントは消す
   aline = gsub(aline, "//.*$", "")
 
-  -- Split line into statements at semicolons.
+  -- 行がセミコロンで区切られた複数の文から成り立っている場合はループで文をすべて処理する。  
+  -- 例: `mov R1, S.value;  mov R2, S.value.na[1];  mov R3, S.tt`
   if match(aline, ";") then
     for stmt in gmatch(aline, "[^;]+") do dostmt(stmt) end
   else
@@ -891,7 +929,7 @@ readfile = function(fin)
   g_lineno = 0
   g_synclineno = -1
 
-  -- Process all lines.
+  -- 全部の行を1行ずつ処理していく
   for line in fin:lines() do
     g_lineno = g_lineno + 1
     g_curline = line
@@ -900,7 +938,7 @@ readfile = function(fin)
   end
   wflush()
 
-  -- Close input file.
+  -- 入力ファイルを閉じる
   assert(fin == stdin or fin:close())
 end
 
@@ -932,10 +970,11 @@ local function translate(infile, outfile)
   g_lineno = 0
   g_synclineno = -1
 
-  -- Put header.
+  -- ヘッダを書き込む
   wline(dasmhead)
 
-  -- Read input file.
+  -- 入力ファイルを読み込む
+  -- このときにプリプロセスを行う
   local fin
   if infile == "-" then
     g_fname = "(stdin)"
@@ -946,10 +985,8 @@ local function translate(infile, outfile)
   end
   readfile(fin)
 
-  -- Check for errors.
-  if not g_arch then
-    wprinterr(g_fname, ":*: error: missing .arch directive\n")
-  end
+  -- 処理終了後、エラーがあるかどうかチェック
+  if not g_arch then wprinterr(g_fname, ":*: error: missing .arch directive\n") end
   checkconds()
   checkmacros()
   checkcaptures()
@@ -962,7 +999,7 @@ local function translate(infile, outfile)
     exit(1)
   end
 
-  -- Write output file.
+  -- 出力ファイルを書き出す
   writefile(outfile)
 end
 
@@ -1038,7 +1075,8 @@ local function parseopt(opt, args)
   f(args)
 end
 
--- Parse arguments.
+-- ルート関数  
+-- 引数をパースして処理を開始する
 local function parseargs(args)
   -- Default options.
   g_opt.comment = "//|"
