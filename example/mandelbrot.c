@@ -29,35 +29,56 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
   unsigned loops[MAX_NESTING];
   int nloops = 0;
   int n;
-  dasm_State* d;
+
+  dasm_State* d;  // DynASMステート
   unsigned npc = 8;
   unsigned nextpc = 0;
 
+  // アーキテクチャの指定(今回はx64)
   |.arch x64
+
+  // dasm_Stateに実際にメモリを割り当てる(初期化処理)
+  // 今回はcodeセクションのみなのでdasm_initの第2引数は1
   |.section code
   dasm_init(&d, DASM_MAXSECTION);
 
+  // dasm_Stateの初期化処理の続き
+  // おまじない？
   |.globals lbl_
   void* labels[lbl__MAX];
   dasm_setupglobal(&d, labels, lbl__MAX);
-  
+
+  // dasm_Stateの初期化処理の続き
+  // おまじない？
   |.actionlist bf_actions
   dasm_setup(&d, bf_actions);
+
   dasm_growpc(&d, npc);
-  |.define aPtr, rbx
-  |.define aState, r12
+
+  // マクロによって可読性をあげておく
+  |.define aPtr, rbx        // テープの現在位置
+  |.define aState, r12      // bfランタイムのステート
   |.define aTapeBegin, r13
   |.define aTapeEnd, r14
   |.define rArg1, rdi
   |.define rArg2, rsi
+
+  // 引数を1つとる関数の呼び出し準備
   |.macro prepcall1, arg1
     | mov rArg1, arg1
   |.endmacro
+
+  // 引数を2つとる関数の呼び出し準備
   |.macro prepcall2, arg1, arg2
     | mov rArg1, arg1
     | mov rArg2, arg2
   |.endmacro
+
+  // 
   |.define postcall, .nop
+
+  // スタックフレームの初期化
+  // 引数はaStateに格納される
   |.macro prologue
     | push aPtr
     | push aState
@@ -66,6 +87,8 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
     | push rax
     | mov aState, rArg1
   |.endmacro
+
+  // スタックフレームの解体
   |.macro epilogue
     | pop rax
     | pop aTapeEnd
@@ -75,26 +98,41 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
     | ret
   |.endmacro
 
+  // このディレクティブのおかげで
+  // [aState + offsetof(bf_state_t,tape)] を 
+  // state->tape とかける
   |.type state, bf_state_t, aState
   
   dasm_State** Dst = &d;
+
   |.code
+
+  // グローバルラベル`->bf_main`を定義します。マシンコードの出力が終了したら、このグローバルラベルのアドレスを取得して、関数ポインタにします。
   |->bf_main:
   | prologue
+
+  // マシンコード
   | mov aPtr, state->tape
   | lea aTapeBegin, [aPtr-1]
   | lea aTapeEnd, [aPtr+TAPE_SIZE-1]
   for (;;) {
     switch (*program++) {
-    case '<':
+    case '<': // ポインタのデクリメント
       for (n = 1; *program == '<'; ++n, ++program);
+
+      // if(!nskip) {
+      //  ptr -= n;
+      //  while (ptr <= tape_begin) ptr += TAPE_SIZE;
+      // }
       | sub aPtr, n%TAPE_SIZE
       | cmp aPtr, aTapeBegin
       | ja >1
       | add aPtr, TAPE_SIZE
       |1:
+
       break;
-    case '>':
+
+    case '>': // ポインタのインクリメント
       for (n = 1; *program == '>'; ++n, ++program);
       | add aPtr, n%TAPE_SIZE
       | cmp aPtr, aTapeEnd
@@ -102,27 +140,32 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
       | sub aPtr, TAPE_SIZE
       |1:
       break;
-    case '+':
+
+    case '+': // ポインタの指す値をインクリメント
       for (n = 1; *program == '+'; ++n, ++program);
       | add byte [aPtr], n
       break;
-    case '-':
+
+    case '-': // ポインタの指す値をデクリメント
       for (n = 1; *program == '-'; ++n, ++program);
       | sub byte [aPtr], n
       break;
-    case ',':
+
+    case ',': // 入力から1バイト読み込んで、ポインタが指す値に代入
       | prepcall1 aState
       | call aword state->get_ch
       | postcall 1
       | mov byte [aPtr], al
       break;
-    case '.':
+
+    case '.': // ポインタの値を出力
       | movzx r0, byte [aPtr]
       | prepcall2 aState, r0
       | call aword state->put_ch
       | postcall 2
       break;
-    case '[':
+
+    case '[': // ポインタの指す値が0なら、後の]までジャンプ(要するにwhile)
       if (nloops == MAX_NESTING) {
         bad_program("Nesting too deep");
       }
@@ -142,7 +185,8 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
         nextpc += 2;
       }
       break;
-    case ']':
+
+    case ']': // ポインタの指す値が0でなければ、前の[までジャンプ
       if (nloops == 0) {
         bad_program("] without matching [");
       }
@@ -151,7 +195,8 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
       | jnz =>loops[nloops]
       |=>loops[nloops]+1:
       break;
-    case 0:
+
+    case 0: // ファイル終端に到達したら終了
       if (nloops != 0) {
         program = "<EOF>", bad_program("[ without matching ]");
       }
