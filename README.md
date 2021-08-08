@@ -4,8 +4,6 @@
 
 ちなみに筆者にLua歴はないです。
 
-http://luajit.org/git/luajit-2.0.git
-
 ## docs/
 
 読んで理解したことはここにまとめてあります。
@@ -13,3 +11,8 @@ http://luajit.org/git/luajit-2.0.git
 ## example/
 
 `DynASM`で処理する前のコード(`mandelbrot.c`)と処理した後のコード(`mandelbrot_x64.c`)を例として置いています。
+
+## Credits
+
+- https://luajit.org/
+- https://corsix.github.io/dynasm-doc/index.html
