@@ -2,45 +2,24 @@
 ** This file has been pre-processed with DynASM.
 ** https://luajit.org/dynasm.html
 ** DynASM version 1.3.0, DynASM x64 version 1.3.0
-** DO NOT EDIT! The original file is in "main.c".
+** DO NOT EDIT! The original file is in "./example/mandelbrot.c".
 */
 
-#line 1 "main.c"
-#if ((defined(_M_X64) || defined(__amd64__)) != 1) || (defined(_WIN32) != WIN)
-#error "Wrong DynASM flags used: pass `-D X64` and/or `-D WIN` to dynasm.lua as appropriate"
-#endif
+#line 1 "./example/mandelbrot.c"
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 
 #include "luajit-2.0/dynasm/dasm_proto.h"
 #include "luajit-2.0/dynasm/dasm_x86.h"
-#if _WIN32
-#include <Windows.h>
-#else
-#include <sys/mman.h>
-#if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
-#define MAP_ANONYMOUS MAP_ANON
-#endif
-#endif
 
 static void* link_and_encode(dasm_State** d) {
   size_t sz;
   void* buf;
   dasm_link(d, &sz);
-#ifdef _WIN32
-  buf = VirtualAlloc(0, sz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-#else
   buf = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-#endif
   dasm_encode(d, buf);
-#ifdef _WIN32
-  {
-    DWORD dwOld;
-    VirtualProtect(buf, sz, PAGE_EXECUTE_READ, &dwOld);
-  }
-#else
   mprotect(buf, sz, PROT_READ | PROT_EXEC);
-#endif
   return buf;
 }
 
@@ -62,25 +41,24 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
   dasm_State* d;
   unsigned npc = 8;
   unsigned nextpc = 0;
-  //|.if X64
+
   //|.arch x64
 #if DASM_VERSION != 10300
 #error "Version mismatch between DynASM and included encoding engine"
 #endif
-#line 58 "main.c"
-  //|.else
-  //|.arch x86
-  //|.endif
+#line 37 "./example/mandelbrot.c"
   //|.section code
 #define DASM_SECTION_CODE 0
 #define DASM_MAXSECTION 1
-#line 62 "main.c"
+#line 38 "./example/mandelbrot.c"
   dasm_init(&d, DASM_MAXSECTION);
+
   //|.globals lbl_
   enum { lbl_bf_main, lbl__MAX };
-#line 64 "main.c"
+#line 41 "./example/mandelbrot.c"
   void* labels[lbl__MAX];
   dasm_setupglobal(&d, labels, lbl__MAX);
+
   //|.actionlist bf_actions
   static const unsigned char bf_actions[142] = {254, 0,   248, 10,  83,  65,  84,  65,  85,  65,  86,  80,  73,  137, 252, 252, 73,  139, 156, 253, 36,  233, 76,  141, 107, 252, 255, 76,  141,
                                                 179, 233, 255, 72,  129, 252, 235, 239, 76,  57,  252, 235, 15,  135, 244, 247, 72,  129, 195, 239, 248, 1,   255, 72,  129, 195, 239, 76,  57,
@@ -88,23 +66,15 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
                                                 253, 36,  233, 136, 3,   255, 72,  15,  182, 3,   76,  137, 231, 72,  137, 198, 65,  252, 255, 148, 253, 36,  233, 255, 49,  192, 136, 3,   255,
                                                 128, 59,  0,   15,  132, 245, 249, 255, 128, 59,  0,   15,  133, 245, 249, 255, 88,  65,  94,  65,  93,  65,  92,  91,  195, 255};
 
-#line 67 "main.c"
+#line 45 "./example/mandelbrot.c"
   dasm_setup(&d, bf_actions);
   dasm_growpc(&d, npc);
-  //|.if X64
   //|.define aPtr, rbx
   //|.define aState, r12
-  //|.if WIN
-  //|.define aTapeBegin, rsi
-  //|.define aTapeEnd, rdi
-  //|.define rArg1, rcx
-  //|.define rArg2, rdx
-  //|.else
   //|.define aTapeBegin, r13
   //|.define aTapeEnd, r14
   //|.define rArg1, rdi
   //|.define rArg2, rsi
-  //|.endif
   //|.macro prepcall1, arg1
   //| mov rArg1, arg1
   //|.endmacro
@@ -129,52 +99,22 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
   //| pop aPtr
   //| ret
   //|.endmacro
-  //|.else
-  //|.define aPtr, ebx
-  //|.define aState, ebp
-  //|.define aTapeBegin, esi
-  //|.define aTapeEnd, edi
-  //|.macro prepcall1, arg1
-  //| push arg1
-  //|.endmacro
-  //|.macro prepcall2, arg1, arg2
-  //| push arg2
-  //| push arg1
-  //|.endmacro
-  //|.macro postcall, n
-  //| add esp, 4*n
-  //|.endmacro
-  //|.macro prologue
-  //| push aPtr
-  //| push aState
-  //| push aTapeBegin
-  //| push aTapeEnd
-  //| mov aState, [esp+20]
-  //|.endmacro
-  //|.macro epilogue
-  //| pop aTapeEnd
-  //| pop aTapeBegin
-  //| pop aState
-  //| pop aPtr
-  //| ret 4
-  //|.endmacro
-  //|.endif
 
   //|.type state, bf_state_t, aState
 #define Dt1(_V) (int)(ptrdiff_t) & (((bf_state_t*)0)_V)
-#line 139 "main.c"
+#line 79 "./example/mandelbrot.c"
 
   dasm_State** Dst = &d;
   //|.code
   dasm_put(Dst, 0);
-#line 142 "main.c"
+#line 82 "./example/mandelbrot.c"
   //|->bf_main:
   //| prologue
   //| mov aPtr, state->tape
   //| lea aTapeBegin, [aPtr-1]
   //| lea aTapeEnd, [aPtr+TAPE_SIZE-1]
   dasm_put(Dst, 2, Dt1(->tape), TAPE_SIZE - 1);
-#line 147 "main.c"
+#line 87 "./example/mandelbrot.c"
   for (;;) {
     switch (*program++) {
       case '<':
@@ -186,7 +126,7 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
         //| add aPtr, TAPE_SIZE
         //|1:
         dasm_put(Dst, 32, n % TAPE_SIZE, TAPE_SIZE);
-#line 156 "main.c"
+#line 96 "./example/mandelbrot.c"
         break;
       case '>':
         for (n = 1; *program == '>'; ++n, ++program)
@@ -197,21 +137,21 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
         //| sub aPtr, TAPE_SIZE
         //|1:
         dasm_put(Dst, 52, n % TAPE_SIZE, TAPE_SIZE);
-#line 164 "main.c"
+#line 104 "./example/mandelbrot.c"
         break;
       case '+':
         for (n = 1; *program == '+'; ++n, ++program)
           ;
         //| add byte [aPtr], n
         dasm_put(Dst, 72, n);
-#line 168 "main.c"
+#line 108 "./example/mandelbrot.c"
         break;
       case '-':
         for (n = 1; *program == '-'; ++n, ++program)
           ;
         //| sub byte [aPtr], n
         dasm_put(Dst, 76, n);
-#line 172 "main.c"
+#line 112 "./example/mandelbrot.c"
         break;
       case ',':
         //| prepcall1 aState
@@ -219,7 +159,7 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
         //| postcall 1
         //| mov byte [aPtr], al
         dasm_put(Dst, 80, Dt1(->get_ch));
-#line 178 "main.c"
+#line 118 "./example/mandelbrot.c"
         break;
       case '.':
         //| movzx r0, byte [aPtr]
@@ -227,16 +167,18 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
         //| call aword state->put_ch
         //| postcall 2
         dasm_put(Dst, 93, Dt1(->put_ch));
-#line 184 "main.c"
+#line 124 "./example/mandelbrot.c"
         break;
       case '[':
-        if (nloops == MAX_NESTING) bad_program("Nesting too deep");
+        if (nloops == MAX_NESTING) {
+          bad_program("Nesting too deep");
+        }
         if (program[0] == '-' && program[1] == ']') {
           program += 2;
           //| xor eax, eax
           //| mov byte [aPtr], al
           dasm_put(Dst, 111);
-#line 192 "main.c"
+#line 133 "./example/mandelbrot.c"
         } else {
           if (nextpc == npc) {
             npc *= 2;
@@ -246,25 +188,29 @@ static void (*bf_compile(const char* program))(bf_state_t*) {
           //| jz =>nextpc+1
           //|=>nextpc:
           dasm_put(Dst, 116, nextpc + 1, nextpc);
-#line 200 "main.c"
+#line 141 "./example/mandelbrot.c"
           loops[nloops++] = nextpc;
           nextpc += 2;
         }
         break;
       case ']':
-        if (nloops == 0) bad_program("] without matching [");
+        if (nloops == 0) {
+          bad_program("] without matching [");
+        }
         --nloops;
         //| cmp byte [aPtr], 0
         //| jnz =>loops[nloops]
         //|=>loops[nloops]+1:
         dasm_put(Dst, 124, loops[nloops], loops[nloops] + 1);
-#line 211 "main.c"
+#line 153 "./example/mandelbrot.c"
         break;
       case 0:
-        if (nloops != 0) program = "<EOF>", bad_program("[ without matching ]");
+        if (nloops != 0) {
+          program = "<EOF>", bad_program("[ without matching ]");
+        }
         //| epilogue
         dasm_put(Dst, 132);
-#line 216 "main.c"
+#line 159 "./example/mandelbrot.c"
         link_and_encode(&d);
         dasm_free(&d);
         return (void (*)(bf_state_t*))labels[lbl_bf_main];
@@ -276,6 +222,11 @@ static void bf_putchar(bf_state_t* s, unsigned char c) { putchar((int)c); }
 
 static unsigned char bf_getchar(bf_state_t* s) { return (unsigned char)getchar(); }
 
+/**
+ * brainfxxkを実行する
+ *
+ * @param[in] (program) bfファイルのバイト列
+ */
 static void bf_run(const char* program) {
   bf_state_t state;
   unsigned char tape[TAPE_SIZE] = {0};
