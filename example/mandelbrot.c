@@ -25,6 +25,7 @@ typedef struct bf_state {
 
 #define bad_program(s) exit(fprintf(stderr, "bad program near %.16s: %s\n", program, s))
 
+// func bf_compile(program []byte) (bf_main func(*bf_state_t)) {}
 static void (* bf_compile(const char* program) )(bf_state_t*) {
   unsigned loops[MAX_NESTING];
   int nloops = 0;
@@ -203,6 +204,8 @@ static void (* bf_compile(const char* program) )(bf_state_t*) {
       | epilogue
       link_and_encode(&d);
       dasm_free(&d);
+
+      // bf_mainのアドレスを関数ポインタ`void(*)(bf_state_t*)`にキャストして返す
       return (void(*)(bf_state_t*))labels[lbl_bf_main];
     }
   }
@@ -222,12 +225,15 @@ static unsigned char bf_getchar(bf_state_t* s) {
  * @param[in] (program) bfファイルのバイト列
  */
 static void bf_run(const char* program) {
+  void(*)(bf_state_t*) bf_main;
   bf_state_t state;
   unsigned char tape[TAPE_SIZE] = {0};
   state.tape = tape;
   state.get_ch = bf_getchar;
   state.put_ch = bf_putchar;
-  bf_compile(program)(&state);
+
+  bf_main = bf_compile(program);
+  bf_main(&state);
 }
 
 int main(int argc, char** argv) {
