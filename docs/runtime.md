@@ -121,6 +121,7 @@ DASM_FDEF void dasm_init(dasm_State **Dst, int maxsection); // Dst_DECL == シ�
 DynASMのAPIは10個の関数で構成されており、これらは特定の順序で使用する必要があります。
 
 Phase | Callable Functions
+-- | -- 
 1 | `dasm_init`
 2 | `dasm_setupglobal`
 3 | `dasm_setup`
