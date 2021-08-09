@@ -714,26 +714,26 @@ local function parseoperand(param)
       end
 
       if t.reg == -1 then
-	t.vreg, tailr = match(tailr, "^(%b())(.*)$")
-	if not t.vreg then werror("bad variable register expression") end
+        t.vreg, tailr = match(tailr, "^(%b())(.*)$")
+        if not t.vreg then werror("bad variable register expression") end
       end
 
       -- [xreg*xsc] or [xreg*xsc+-disp] or [xreg*xsc+-expr]
       local xsc, tailsc = match(tailr, "^%*%s*([1248])%s*(.*)$")
       if xsc then
-	if not map_reg_valid_index[reg] then
-	  werror("bad index register `"..map_reg_rev[reg].."'")
-	end
-	t.xsc = map_xsc[xsc]
-	t.xreg = t.reg
-	t.vxreg = t.vreg
-	t.reg = nil
-	t.vreg = nil
-	t.disp = dispexpr(tailsc)
-	break
+        if not map_reg_valid_index[reg] then
+          werror("bad index register `"..map_reg_rev[reg].."'")
+        end
+        t.xsc = map_xsc[xsc]
+        t.xreg = t.reg
+        t.vxreg = t.vreg
+        t.reg = nil
+        t.vreg = nil
+        t.disp = dispexpr(tailsc)
+        break
       end
       if not map_reg_valid_base[reg] then
-	werror("bad base register `"..map_reg_rev[reg].."'")
+        werror("bad base register `"..map_reg_rev[reg].."'")
       end
 
       -- [reg] or [reg+-disp]
@@ -744,12 +744,12 @@ local function parseoperand(param)
       local xreg, tailx = match(tailr, "^%+%s*([@%w_:]+)%s*(.*)$")
       xreg, t.xreg, tp = rtexpr(xreg)
       if not t.xreg then
-	-- [reg+-expr]
-	t.disp = dispexpr(tailr)
-	break
+        -- [reg+-expr]
+        t.disp = dispexpr(tailr)
+        break
       end
       if not map_reg_valid_index[xreg] then
-	werror("bad index register `"..map_reg_rev[xreg].."'")
+        werror("bad index register `"..map_reg_rev[xreg].."'")
       end
 
       if t.xreg == -1 then

@@ -577,6 +577,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
               }
             }
             /* fallthrough */
+            
           case DASM_IMM_S:
           case DASM_IMM_B:
           wb:
@@ -584,17 +585,20 @@ int dasm_encode(Dst_DECL, void *buffer) {
             break;
 
           case DASM_IMM_DB:
-            if (((n + 128) & -256) == 0) {
+            if (((n + 128) & -256) == 0) { // -256=0xffff_ff00 (int=32bit)
+              // nが1バイトに収まる時
             db:
               if (!mark) {
                 mark = cp;
               }
-              mark[-2] += 2;
+              mark[-2] += 2; // オペコードを符号あり8bitを処理するオペコードにする
               mark = NULL;
               goto wb;
-            } else
+            } else {
+              // nが1バイトに収まらないとき
+              // 下のcaseに続いて4byteデータとして処理される
               mark = NULL;
-            /* fallthrough */
+            }
 
           case DASM_IMM_D:
           wd: // バッファに4byte書き込む
@@ -603,17 +607,19 @@ int dasm_encode(Dst_DECL, void *buffer) {
 
           case DASM_IMM_WB:
             if (((n + 128) & -256) == 0) {
+              // nが1バイトに収まる時
               goto db;
             } else {
               mark = NULL;
             }
             /* fallthrough */
-            
+
           case DASM_IMM_W:
             dasmw(n);
             break;
 
           case DASM_VREG: {
+            // ModR/MのREG(5-3bit)またはR/M(2-0bit)部分？
             int t = *p++;
             if (t >= 2) {
               n <<= 3;
@@ -630,6 +636,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
             b++;
             n = (int)(ptrdiff_t)D->globals[-n];
             /* fallthrough */
+
           case DASM_REL_A:
           rel_a:
             n -= (unsigned int)(ptrdiff_t)(cp + 4);
@@ -652,6 +659,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
               cp[-1] = 0xeb;
             goto wb;
           }
+
           case DASM_IMM_LG:
             p++;
             if (n < 0) {
@@ -659,6 +667,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
               goto wd;
             }
             /* fallthrough */
+
           case DASM_IMM_PC: {
             int *pb = DASM_POS2PTR(D, n);
             n = *pb < 0 ? pb[1] : (*pb + (int)(ptrdiff_t)base);

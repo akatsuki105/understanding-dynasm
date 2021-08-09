@@ -91,6 +91,102 @@ enum {
 
 `b`は1バイトです。
 
+`w`は2バイトです。
+
+`n`は整数で環境依存です。
+
+### DISP
+
+```sh
+actinlist: 233, n
+```
+
+TODO
+
+### IMM_S, IMM_B
+
+```sh
+actinlist: 234, n # IMM_Bの場合は235
+buffer: b
+```
+
+マシンコードを入れるバッファに整数の下位1バイトを追加します。
+
+### IMM_WB
+
+```sh
+actionlist: 238, n
+buffer: b または w
+```
+
+下の`IMM_DB`のword版です。
+
+### IMM_W
+
+```sh
+actinlist: 236, n
+buffer: w
+```
+
+マシンコードを入れるバッファに整数の下位2バイトを追加します。
+
+### IMM_DB
+
+```sh
+actionlist: 239, n
+buffer: b または d
+```
+
+オペコードが符号あり8bitの範囲で表現できる場合は
+
+- バッファの前のオペコードに+2を加えて符号あり8bit用にオペコードを改変
+- バイトをバッファに追加
+
+します。
+
+8bitじゃ表現し切れない場合は`IMM_D`と同様に4バイト整数として格納します。
+
+### IMM_D
+
+```sh
+actinlist: 237, n
+buffer: n
+```
+
+マシンコードを入れるバッファに整数を追加します。
+
+### VREG
+
+```sh
+actionlist: 240, n0, n1
+buffer: なし
+```
+
+すでにバッファに書き込まれた命令のModR/M(コード上では`cp[-1]`と表される)にレジスタインデックスをセットします。
+
+n1は`0~3`のどれかです。
+
+n1が`2, 3`のときは`REG`(bit3-5)、`0, 1`のときは`R/M`(bit0-2)に対してレジスタインデックス`n0`をセットします。
+
+
+### SPACE
+
+```sh
+actionlist: 241, n0, n1
+buffer: n1, n1, n1, ... # n0の数だけ続く
+```
+
+bufferを`n0`個の整数`n1`で埋めます。
+
+### SETLABEL
+
+```sh
+actionlist: 242
+buffer: なし
+```
+
+TODO
+
 ### ALIGN
 
 ```sh
@@ -104,7 +200,7 @@ buffer: 不定
 
 ### EXTERN
 
-```
+```sh
 actionlist: 251, b, b
 buffer: 0, 0, 0, 0
 ```
@@ -113,7 +209,7 @@ buffer: 0, 0, 0, 0
 
 ### ESC
 
-```
+```sh
 actionlist: 252, b
 buffer: b
 ```
@@ -122,20 +218,24 @@ buffer: b
 
 ### MARK
 
-```
+```sh
 actionlist: 253
 buffer: なし
 ```
 
+内部的に使われるものです。
+
+現在マシンコードを詰めているバッファの位置を記録します。記録したバッファの位置は`DISP`や`IMM_DB`などのアクションを処理する際に利用されます。
+
 ### SECTION
 
-```
+```sh
 actionlist: 254, b
 ```
 
 ### STOP
 
-```
+```sh
 actionlist: 255
 buffer: なし
 ```
