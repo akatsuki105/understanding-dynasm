@@ -127,7 +127,8 @@ local function wputxb(n)
   actlist[#actlist+1] = n
 end
 
--- Add action to list with optional arg. Advance buffer pos, too.
+-- Add action to list with optional arg.  
+-- Advance buffer pos, too.
 local function waction(action, a, num)
   wputxb(assert(map_action[action], "bad action name `"..action.."'"))
   if a then actargs[#actargs+1] = a end
@@ -459,24 +460,22 @@ local function wputszarg(sz, n)
   else werror("bad operand size") end
 end
 
--- Put multi-byte opcode with operand-size dependent modifications.
+-- オペランドサイズに依存した修正を施したマルチバイトのオペコードを格納する
 local function wputop(sz, op, rex)
   local r
-  if rex ~= 0 and not x64 then werror("bad operand size") end
-  if sz == "w" then wputb(102) end
+  if rex ~= 0 and not x64 then werror("bad operand size") end -- REXが使えるのはx64だけ
+  if sz == "w" then wputb(102) end -- 0x66: 扱うデータサイズを変更するためのプレフィックス
   -- Needs >32 bit numbers, but only for crc32 eax, word [ebx]
   if op >= 4294967296 then r = op%4294967296 wputb((op-r)/4294967296) op = r end
   if op >= 16777216 then wputb(shr(op, 24)); op = band(op, 0xffffff) end
-  if op >= 65536 then
+  if op >= 65536 then -- op_width >= 4bytes
     if rex ~= 0 then
       local opc3 = band(op, 0xffff00)
-      if opc3 == 0x0f3a00 or opc3 == 0x0f3800 then
-	wputb(64 + band(rex, 15)); rex = 0
-      end
+      if opc3 == 0x0f3a00 or opc3 == 0x0f3800 then wputb(64 + band(rex, 15)); rex = 0 end
     end
     wputb(shr(op, 16)); op = band(op, 0xffff)
   end
-  if op >= 256 then
+  if op >= 256 then -- op_width >= 2bytes
     local b = shr(op, 8)
     if b == 15 and rex ~= 0 then wputb(64 + band(rex, 15)); rex = 0 end
     wputb(b)
@@ -551,8 +550,11 @@ local function wputmrmsib(t, imark, s, vsreg)
   if tdisp == "number" then -- Check displacement size at assembly time.
     if disp == 0 and band(reg, 7) ~= 5 then -- [ebp] -> [ebp+0] (in SIB, too)
       if not vreg then m = 0 end -- Force DISP to allow [Rd(5)] -> [ebp+0]
-    elseif disp >= -128 and disp <= 127 then m = 1
-    else m = 2 end
+    elseif disp >= -128 and disp <= 127 then
+      m = 1
+    else
+      m = 2
+    end
   elseif tdisp == "table" then
     m = 2
   end
@@ -1507,11 +1509,11 @@ local function dopattern(pat, args, sz, op, needrex)
     elseif c == "m" or c == "M" then	-- Encode ModRM/SIB.
       local s
       if addin then
-	s = addin.reg
-	opcode = opcode - band(s, 7)	-- Undo regno opcode merge.
+        s = addin.reg
+        opcode = opcode - band(s, 7)	-- Undo regno opcode merge.
       else
-	s = band(opcode, 15)	-- Undo last digit.
-	opcode = shr(opcode, 4)
+        s = band(opcode, 15)	-- Undo last digit.
+        opcode = shr(opcode, 4)
       end
       local nn = c == "m" and 1 or 2
       local t = args[nn]
@@ -1528,53 +1530,53 @@ local function dopattern(pat, args, sz, op, needrex)
       addin = nil
     else
       if opcode then -- Flush opcode.
-	if szov == "q" and rex == 0 then rex = rex + 8 end
-	if needrex then rex = rex + 16 end
-	if addin and addin.reg == -1 then
-	  wputop(szov, opcode - 7, rex)
-	  waction("VREG", addin.vreg); wputxb(0)
-	else
-	  if addin and addin.reg > 7 then rex = rex + 1 end
-	  wputop(szov, opcode, rex)
-	end
-	opcode = nil
+        if szov == "q" and rex == 0 then rex = rex + 8 end
+        if needrex then rex = rex + 16 end
+        if addin and addin.reg == -1 then
+          wputop(szov, opcode - 7, rex)
+          waction("VREG", addin.vreg); wputxb(0)
+        else
+          if addin and addin.reg > 7 then rex = rex + 1 end
+          wputop(szov, opcode, rex)
+        end
+        opcode = nil
       end
       if c == "|" then break end
       if c == "o" then -- Offset (pure 32 bit displacement).
-	wputdarg(args[1].disp); if narg < 2 then narg = 2 end
+        wputdarg(args[1].disp); if narg < 2 then narg = 2 end
       elseif c == "O" then
-	wputdarg(args[2].disp); narg = 3
+        wputdarg(args[2].disp); narg = 3
       else
-	-- Anything else is an immediate operand.
-	local a = args[narg]
-	narg = narg + 1
-	local mode, imm = a.mode, a.imm
-	if mode == "iJ" and not match("iIJ", c) then
-	  werror("bad operand size for label")
-	end
-	if c == "S" then
-	  wputsbarg(imm)
-	elseif c == "U" then
-	  wputbarg(imm)
-	elseif c == "W" then
-	  wputwarg(imm)
-	elseif c == "i" or c == "I" then
-	  if mode == "iJ" then
-	    wputlabel("IMM_", imm, 1)
-	  elseif mode == "iI" and c == "I" then
-	    waction(sz == "w" and "IMM_WB" or "IMM_DB", imm)
-	  else
-	    wputszarg(sz, imm)
-	  end
-	elseif c == "J" then
-	  if mode == "iPJ" then
-	    waction("REL_A", imm) -- !x64 (secpos)
-	  else
-	    wputlabel("REL_", imm, 2)
-	  end
-	else
-	  werror("bad char `"..c.."' in pattern `"..pat.."' for `"..op.."'")
-	end
+        -- Anything else is an immediate operand.
+        local a = args[narg]
+        narg = narg + 1
+        local mode, imm = a.mode, a.imm
+        if mode == "iJ" and not match("iIJ", c) then
+          werror("bad operand size for label")
+        end
+        if c == "S" then
+          wputsbarg(imm)
+        elseif c == "U" then
+          wputbarg(imm)
+        elseif c == "W" then
+          wputwarg(imm)
+        elseif c == "i" or c == "I" then
+          if mode == "iJ" then
+            wputlabel("IMM_", imm, 1)
+          elseif mode == "iI" and c == "I" then
+            waction(sz == "w" and "IMM_WB" or "IMM_DB", imm)
+          else
+            wputszarg(sz, imm)
+          end
+        elseif c == "J" then
+          if mode == "iPJ" then
+            waction("REL_A", imm) -- !x64 (secpos)
+          else
+            wputlabel("REL_", imm, 2)
+          end
+        else
+          werror("bad char `"..c.."' in pattern `"..pat.."' for `"..op.."'")
+        end
       end
     end
   end

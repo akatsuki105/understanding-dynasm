@@ -19,3 +19,4 @@
 - https://luajit.org/
 - https://corsix.github.io/dynasm-doc/index.html
 - https://qiita.com/TomoShiozawa/items/25dcce1540085df71053
+- https://ja.tech.jar.jp/x86/encode.html

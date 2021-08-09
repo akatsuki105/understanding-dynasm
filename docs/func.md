@@ -51,7 +51,15 @@ extern void dasm_free(dasm_State **Dst);
 
 ## dasm_growpc
 
-省略
+```cpp
+DASM_FDEF void dasm_growpc(Dst_DECL, unsigned int maxpc);
+// ↓
+extern void dasm_growpc(dasm_State **Dst, unsigned int maxpc);
+```
+
+この関数は、`dasm_setup`と`dasm_link`の間に呼び出され、`=>pc`シンタックスを利用可能なラベルの数を増やすために使われます。
+
+特に、この関数を読んだ後で`=>(maxpc-1)`を通して`=>0`というラベルが利用可能になります。
 
 ## dasm_init
 

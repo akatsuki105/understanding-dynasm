@@ -17,29 +17,29 @@
 
 /* Action definitions. DASM_STOP must be 255. */
 enum {
-  DASM_DISP = 233,
-  DASM_IMM_S,
-  DASM_IMM_B,
-  DASM_IMM_W,
-  DASM_IMM_D,
-  DASM_IMM_WB,
-  DASM_IMM_DB,
-  DASM_VREG,
-  DASM_SPACE,
-  DASM_SETLABEL,
-  DASM_REL_A,
-  DASM_REL_LG,
-  DASM_REL_PC,
-  DASM_IMM_LG,
-  DASM_IMM_PC,
-  DASM_LABEL_LG,
-  DASM_LABEL_PC,
-  DASM_ALIGN,
-  DASM_EXTERN,
-  DASM_ESC,
-  DASM_MARK,
-  DASM_SECTION,
-  DASM_STOP
+  DASM_DISP = 233, // オフセット [ebp+xx]のxxの部分
+  DASM_IMM_S = 234,
+  DASM_IMM_B = 235,
+  DASM_IMM_W = 236,
+  DASM_IMM_D = 237,
+  DASM_IMM_WB = 238,
+  DASM_IMM_DB = 239,
+  DASM_VREG = 240,
+  DASM_SPACE = 241,
+  DASM_SETLABEL = 242,
+  DASM_REL_A = 243,
+  DASM_REL_LG = 244,
+  DASM_REL_PC = 245,
+  DASM_IMM_LG = 246,
+  DASM_IMM_PC = 247,
+  DASM_LABEL_LG = 248,
+  DASM_LABEL_PC = 249,
+  DASM_ALIGN = 250,
+  DASM_EXTERN = 251,
+  DASM_ESC = 252,
+  DASM_MARK = 253,
+  DASM_SECTION = 254,
+  DASM_STOP = 255
 };
 
 /* Maximum number of section buffer positions for a single dasm_put() call. */
@@ -68,7 +68,10 @@ enum {
 /* Action list type. */
 typedef const unsigned char *dasm_ActList;
 
-/* Per-section structure. */
+/**
+ * @struct  dasm_Section
+ * @brief  セクション構造体
+ */
 typedef struct dasm_Section {
   int *rbuf;    /* Biased buffer pointer (negative section bias). */
   int *buf;     /* True buffer pointer. */
@@ -94,8 +97,8 @@ struct dasm_State {
   dasm_Section sections[1]; /* All sections. Alloc-extended. */
 };
 
-/* The size of the core structure depends on the max. number of sections. */
-#define DASM_PSZ(ms) (sizeof(dasm_State) + (ms - 1) * sizeof(dasm_Section))
+// セクションの最大数に応じた、`dasm_State`構造体のサイズを返す。
+#define DASM_PSZ(maxSections) (sizeof(dasm_State) + (maxSections - 1) * sizeof(dasm_Section))
 
 /* Initialize DynASM state. */
 void dasm_init(Dst_DECL, int maxsection) {
@@ -103,7 +106,10 @@ void dasm_init(Dst_DECL, int maxsection) {
   size_t psz = 0;
   int i;
   Dst_REF = NULL;
+
+  // dasm_Stateのメモリを確保
   DASM_M_GROW(Dst, struct dasm_State, Dst_REF, psz, DASM_PSZ(maxsection));
+
   D = Dst_REF;
   D->psize = psz;
   D->lglabels = NULL;
@@ -194,23 +200,29 @@ void dasm_setup(Dst_DECL, const void *actionlist) {
 void dasm_put(Dst_DECL, int start, ...) {
   va_list ap;
   dasm_State *D = Dst_REF;
-  dasm_ActList p = D->actionlist + start;
+  dasm_ActList p = D->actionlist + start;  // 以後、pは現在のアクションリストの位置を指すために使われる
   dasm_Section *sec = D->section;
+
+  // ofs = バッファのオフセット？
   int pos = sec->pos, ofs = sec->ofs, mrm = 4;
   int *b;
 
+  // 書き込み対象がバッファを突き抜けてしまっている場合は、バッファ(sec->buf)を拡張する
   if (pos >= sec->epos) {
     DASM_M_GROW(Dst, int, sec->buf, sec->bsize, sec->bsize + 2 * DASM_MAXSECPOS * sizeof(int));
-    sec->rbuf = sec->buf - DASM_POS2BIAS(pos);
-    sec->epos = (int)sec->bsize / sizeof(int) - DASM_MAXSECPOS + DASM_POS2BIAS(pos);
+    sec->rbuf = sec->buf - DASM_POS2BIAS(pos); // sec->rbuf = sec->buf & 0xff00_0000
+    sec->epos = ((int)sec->bsize / sizeof(int)) - DASM_MAXSECPOS + DASM_POS2BIAS(pos);
   }
 
-  b = sec->rbuf;
+  b = sec->rbuf; // []int
   b[pos++] = start;
 
   va_start(ap, start);
   while (1) {
+    // actionlist[start]の値
     int action = *p++;
+
+    // actionに応じた処理
     if (action < DASM_DISP) {
       ofs++;
     } else if (action <= DASM_REL_A) {
@@ -233,27 +245,33 @@ void dasm_put(Dst_DECL, int start, ...) {
         case DASM_IMM_D:
           ofs += 4;
           break;
+
         case DASM_IMM_S:
           CK(((n + 128) & -256) == 0, RANGE_I);
           goto ob;
+
         case DASM_IMM_B:
           CK((n & -256) == 0, RANGE_I);
         ob:
           ofs++;
           break;
+
         case DASM_IMM_WB:
           if (((n + 128) & -256) == 0) goto ob; /* fallthrough */
         case DASM_IMM_W:
           CK((n & -65536) == 0, RANGE_I);
           ofs += 2;
           break;
+
         case DASM_SPACE:
           p++;
           ofs += n;
           break;
+
         case DASM_SETLABEL:
           b[pos - 2] = -0x40000000;
           break; /* Neg. label ofs. */
+
         case DASM_VREG:
           CK((n & -8) == 0 && (n != 4 || (*p & 1) == 0), RANGE_VREG);
           if (*p++ == 1 && *p == DASM_DISP) {
@@ -279,6 +297,7 @@ void dasm_put(Dst_DECL, int start, ...) {
           n = *pl;
           if (n < 0) n = 0; /* Start new chain for fwd rel if label exists. */
           goto linkrel;
+          
         case DASM_REL_PC:
         case DASM_IMM_PC:
           pl = D->pclabels + va_arg(ap, int);
@@ -299,10 +318,12 @@ void dasm_put(Dst_DECL, int start, ...) {
             b[pos++] = ofs; /* Store pass1 offset estimate. */
           }
           break;
+
         case DASM_LABEL_LG:
           pl = D->lglabels + *p++;
           CKPL(lg, LG);
           goto putlabel;
+
         case DASM_LABEL_PC:
           pl = D->pclabels + va_arg(ap, int);
           CKPL(pc, PC);
@@ -316,21 +337,26 @@ void dasm_put(Dst_DECL, int start, ...) {
           *pl = -pos;     /* Label exists now. */
           b[pos++] = ofs; /* Store pass1 offset estimate. */
           break;
+
         case DASM_ALIGN:
           ofs += *p++;    /* Maximum alignment needed (arg is 2**n-1). */
           b[pos++] = ofs; /* Store pass1 offset estimate. */
           break;
+
         case DASM_EXTERN:
           p += 2;
           ofs += 4;
           break;
+
         case DASM_ESC:
           p++;
           ofs++;
           break;
+
         case DASM_MARK:
           mrm = p[-2];
           break;
+
         case DASM_SECTION:
           n = *p;
           CK(n < D->maxsection, RANGE_SEC);
@@ -477,6 +503,7 @@ int dasm_link(Dst_DECL, size_t *szp) {
   return DASM_S_OK;
 }
 
+// b:1byte, w:word(2byte), d:dword(4byte)
 #define dasmb(x) *cp++ = (unsigned char)(x)
 #ifndef DASM_ALIGNED_WRITES
 #define dasmw(x)                                   \
@@ -502,7 +529,8 @@ int dasm_link(Dst_DECL, size_t *szp) {
   } while (0)
 #endif
 
-/* Pass 3: Encode sections. */
+// Pass 3: 実際のマシンコードを引数の`buffer`にセットしていく
+// ここで`dasm_put`で`sec->buf`につめたアクションの処理を行う
 int dasm_encode(Dst_DECL, void *buffer) {
   dasm_State *D = Dst_REF;
   unsigned char *base = (unsigned char *)buffer;
@@ -523,22 +551,30 @@ int dasm_encode(Dst_DECL, void *buffer) {
         int n = (action >= DASM_DISP && action <= DASM_ALIGN) ? *b++ : 0;
         switch (action) {
           case DASM_DISP:
-            if (!mark) mark = cp;
+            if (!mark) {
+              mark = cp;
+            }
+
             {
               unsigned char *mm = mark;
-              if (*p != DASM_IMM_DB && *p != DASM_IMM_WB) mark = NULL;
+              if (*p != DASM_IMM_DB && *p != DASM_IMM_WB) {
+                mark = NULL;
+              }
               if (n == 0) {
                 int mrm = mm[-1] & 7;
-                if (mrm == 4) mrm = mm[0] & 7;
+                if (mrm == 4) {
+                  mrm = mm[0] & 7;
+                }
                 if (mrm != 5) {
                   mm[-1] -= 0x80;
                   break;
                 }
               }
-              if (((n + 128) & -256) != 0)
+              if (((n + 128) & -256) != 0) {
                 goto wd;
-              else
+              } else {
                 mm[-1] -= 0x40;
+              }
             }
             /* fallthrough */
           case DASM_IMM_S:
@@ -546,10 +582,13 @@ int dasm_encode(Dst_DECL, void *buffer) {
           wb:
             dasmb(n);
             break;
+
           case DASM_IMM_DB:
             if (((n + 128) & -256) == 0) {
             db:
-              if (!mark) mark = cp;
+              if (!mark) {
+                mark = cp;
+              }
               mark[-2] += 2;
               mark = NULL;
               goto wb;
@@ -560,24 +599,32 @@ int dasm_encode(Dst_DECL, void *buffer) {
           wd:
             dasmd(n);
             break;
+
           case DASM_IMM_WB:
-            if (((n + 128) & -256) == 0)
+            if (((n + 128) & -256) == 0) {
               goto db;
-            else
+            } else {
               mark = NULL;
+            }
             /* fallthrough */
           case DASM_IMM_W:
             dasmw(n);
             break;
+
           case DASM_VREG: {
             int t = *p++;
-            if (t >= 2) n <<= 3;
+            if (t >= 2) {
+              n <<= 3;
+            }
             cp[-1] |= n;
             break;
           }
+
           case DASM_REL_LG:
             p++;
-            if (n >= 0) goto rel_pc;
+            if (n >= 0) {
+              goto rel_pc;
+            }
             b++;
             n = (int)(ptrdiff_t)D->globals[-n];
             /* fallthrough */
@@ -585,6 +632,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
           rel_a:
             n -= (unsigned int)(ptrdiff_t)(cp + 4);
             goto wd; /* !x64 */
+
           case DASM_REL_PC:
           rel_pc : {
             int shrink = *b++;
@@ -614,36 +662,44 @@ int dasm_encode(Dst_DECL, void *buffer) {
             n = *pb < 0 ? pb[1] : (*pb + (int)(ptrdiff_t)base);
             goto wd;
           }
+
           case DASM_LABEL_LG: {
             int idx = *p++;
             if (idx >= 10) D->globals[idx] = (void *)(base + (*p == DASM_SETLABEL ? *b : n));
             break;
           }
+
           case DASM_LABEL_PC:
           case DASM_SETLABEL:
             break;
+
           case DASM_SPACE: {
             int fill = *p++;
             while (n--) *cp++ = fill;
             break;
           }
+
           case DASM_ALIGN:
             n = *p++;
             while (((cp - base) & n)) *cp++ = 0x90; /* nop */
             break;
+
           case DASM_EXTERN:
             n = DASM_EXTERN(Dst, cp, p[1], *p);
             p += 2;
             goto wd;
+
           case DASM_MARK:
             mark = cp;
             break;
+
           case DASM_ESC:
             action = *p++;
             /* fallthrough */
           default:
             *cp++ = action;
             break;
+            
           case DASM_SECTION:
           case DASM_STOP:
             goto stop;
