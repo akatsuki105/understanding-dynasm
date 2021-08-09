@@ -87,5 +87,55 @@ enum {
 };
 ```
 
-## MARK, STOP
+## 各アクションについて
 
+`b`は1バイトです。
+
+### ALIGN
+
+```sh
+actionlist: 250, b # bはアラインメントの単位を表す
+buffer: 不定
+```
+
+マシンコードを入れるバッファをアラインメントするためのアクションです。
+
+例えばアクションの引数に4を渡した場合、マシンコードのバッファは4の倍数のアドレスにくるまで`nop`命令で埋められます。
+
+### EXTERN
+
+```
+actionlist: 251, b, b
+buffer: 0, 0, 0, 0
+```
+
+ユーザーが`DASM_EXTERN`を再定義しない限りは`buffer`には0(4byte)が入ります
+
+### ESC
+
+```
+actionlist: 252, b
+buffer: b
+```
+
+おそらく、actionlistで使っている233から255までのバイトをマシンコードとして出力したい時にエスケープするためのアクションです。
+
+### MARK
+
+```
+actionlist: 253
+buffer: なし
+```
+
+### SECTION
+
+```
+actionlist: 254, b
+```
+
+### STOP
+
+```
+actionlist: 255
+buffer: なし
+```

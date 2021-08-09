@@ -297,7 +297,7 @@ void dasm_put(Dst_DECL, int start, ...) {
           n = *pl;
           if (n < 0) n = 0; /* Start new chain for fwd rel if label exists. */
           goto linkrel;
-          
+
         case DASM_REL_PC:
         case DASM_IMM_PC:
           pl = D->pclabels + va_arg(ap, int);
@@ -544,7 +544,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
     int *endb = sec->rbuf + sec->pos;
 
     while (b != endb) {
-      dasm_ActList p = D->actionlist + *b++;
+      dasm_ActList p = D->actionlist + *b++; // p: アクションリストのポインタ
       unsigned char *mark = NULL;
       while (1) {
         int action = *p++;
@@ -595,8 +595,9 @@ int dasm_encode(Dst_DECL, void *buffer) {
             } else
               mark = NULL;
             /* fallthrough */
+
           case DASM_IMM_D:
-          wd:
+          wd: // バッファに4byte書き込む
             dasmd(n);
             break;
 
@@ -607,6 +608,7 @@ int dasm_encode(Dst_DECL, void *buffer) {
               mark = NULL;
             }
             /* fallthrough */
+            
           case DASM_IMM_W:
             dasmw(n);
             break;
@@ -694,8 +696,9 @@ int dasm_encode(Dst_DECL, void *buffer) {
             break;
 
           case DASM_ESC:
-            action = *p++;
+            action = *p++; // action arg(1byte)を読み込む
             /* fallthrough */
+
           default:
             *cp++ = action;
             break;
