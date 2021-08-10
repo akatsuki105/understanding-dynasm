@@ -605,11 +605,11 @@ local function parse_imm(imm, bits, shift, scale, signed)
     local m = sar(n, scale)
     if shl(m, scale) == n then
       if signed then
-	local s = sar(m, bits-1)
-	if s == 0 then return shl(m, shift)
-	elseif s == -1 then return shl(m + shl(1, bits), shift) end
+        local s = sar(m, bits-1)
+        if s == 0 then return shl(m, shift)
+        elseif s == -1 then return shl(m + shl(1, bits), shift) end
       else
-	if sar(m, bits) == 0 then return shl(m, shift) end
+        if sar(m, bits) == 0 then return shl(m, shift) end
       end
     end
     werror("out of range immediate `"..imm.."'")
@@ -851,9 +851,9 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "P" then
       local imm = match(q, "^#(.*)$")
       if imm then
-	op = op + parse_imm12(imm) + 0x02000000
+        op = op + parse_imm12(imm) + 0x02000000
       else
-	op = op + parse_gpr(q)
+        op = op + parse_gpr(q)
       end
       n = n + 1
     elseif p == "p" then
@@ -867,12 +867,12 @@ local function parse_template(params, template, nparams, pos)
       waction("REL_"..mode, n, s, 1)
     elseif p == "C" then -- blx gpr vs. blx label.
       if match(q, "^([%w_]+):(r1?[0-9])$") or match(q, "^r(1?[0-9])$") then
-	op = op + parse_gpr(q)
+        op = op + parse_gpr(q)
       else
-	if op < 0xe0000000 then werror("unconditional instruction") end
-	local mode, n, s = parse_label(q, false)
-	waction("REL_"..mode, n, s, 1)
-	op = 0xfa000000
+        if op < 0xe0000000 then werror("unconditional instruction") end
+        local mode, n, s = parse_label(q, false)
+        waction("REL_"..mode, n, s, 1)
+        op = 0xfa000000
       end
     elseif p == "F" then
       vr = "s"
@@ -902,13 +902,13 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "Y" then
       local imm = tonumber(match(q, "^#(.*)$")); n = n + 1
       if not imm or shr(imm, 8) ~= 0 then
-	werror("bad immediate operand")
+        werror("bad immediate operand")
       end
       op = op + shl(band(imm, 0xf0), 12) + band(imm, 0x0f)
     elseif p == "K" then
       local imm = tonumber(match(q, "^#(.*)$")); n = n + 1
       if not imm or shr(imm, 16) ~= 0 then
-	werror("bad immediate operand")
+        werror("bad immediate operand")
       end
       op = op + shl(band(imm, 0xfff0), 4) + band(imm, 0x000f)
     elseif p == "T" then

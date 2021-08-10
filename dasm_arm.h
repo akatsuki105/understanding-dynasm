@@ -17,24 +17,26 @@
 
 /* Action definitions. */
 enum {
-  DASM_STOP,
-  DASM_SECTION,
-  DASM_ESC,
-  DASM_REL_EXT,
-  /* The following actions need a buffer position. */
-  DASM_ALIGN,
-  DASM_REL_LG,
-  DASM_LABEL_LG,
-  /* The following actions also have an argument. */
-  DASM_REL_PC,
-  DASM_LABEL_PC,
-  DASM_IMM,
-  DASM_IMM12,
-  DASM_IMM16,
-  DASM_IMML8,
-  DASM_IMML12,
-  DASM_IMMV8,
-  DASM__MAX
+  DASM_STOP = 0,
+  DASM_SECTION = 1,
+  DASM_ESC = 2,
+  DASM_REL_EXT = 3,
+
+  /* 次の3つのアクションはバッファのポジションを引数として必要とするアクションです */
+  DASM_ALIGN = 4,
+  DASM_REL_LG = 5,
+  DASM_LABEL_LG = 6,
+  
+  /* 以降のポジションは引数を持っているアクションです */
+  DASM_REL_PC = 7,
+  DASM_LABEL_PC = 8,
+  DASM_IMM = 9,
+  DASM_IMM12 = 10,
+  DASM_IMM16 = 11,
+  DASM_IMML8 = 12,
+  DASM_IMML12 = 13,
+  DASM_IMMV8 = 14,
+  DASM__MAX = 15
 };
 
 /* Maximum number of section buffer positions for a single dasm_put() call. */
@@ -178,8 +180,9 @@ void dasm_setup(Dst_DECL, const void *actionlist) {
 
 static int dasm_imm12(unsigned int n) {
   int i;
-  for (i = 0; i < 16; i++, n = (n << 2) | (n >> 30))
+  for (i = 0; i < 16; i++, n = (n << 2) | (n >> 30)) {
     if (n <= 255) return (int)(n + (i << 8));
+  }
   return -1;
 }
 
@@ -313,11 +316,14 @@ int dasm_link(Dst_DECL, size_t *szp) {
 
 #ifdef DASM_CHECKS
   *szp = 0;
-  if (D->status != DASM_S_OK) return D->status;
+  if (D->status != DASM_S_OK) {
+    return D->status;
+  }
   {
     int pc;
-    for (pc = 0; pc * sizeof(int) < D->pcsize; pc++)
+    for (pc = 0; pc * sizeof(int) < D->pcsize; pc++) {
       if (D->pclabels[pc] > 0) return DASM_S_UNDEF_PC | pc;
+    }
   }
 #endif
 
@@ -350,22 +356,28 @@ int dasm_link(Dst_DECL, size_t *szp) {
           case DASM_STOP:
           case DASM_SECTION:
             goto stop;
+
           case DASM_ESC:
             p++;
             break;
+
           case DASM_REL_EXT:
             break;
+
           case DASM_ALIGN:
             ofs -= (b[pos++] + ofs) & (ins & 255);
             break;
+
           case DASM_REL_LG:
           case DASM_REL_PC:
             pos++;
             break;
+
           case DASM_LABEL_LG:
           case DASM_LABEL_PC:
             b[pos++] += ofs;
             break;
+
           case DASM_IMM:
           case DASM_IMM12:
           case DASM_IMM16:
@@ -419,19 +431,26 @@ int dasm_encode(Dst_DECL, void *buffer) {
           case DASM_STOP:
           case DASM_SECTION:
             goto stop;
+
           case DASM_ESC:
             *cp++ = *p++;
             break;
+
           case DASM_REL_EXT:
             n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), !(ins & 2048));
             goto patchrel;
+
           case DASM_ALIGN:
             ins &= 255;
-            while ((((char *)cp - base) & ins)) *cp++ = 0xe1a00000;
+            while ((((char *)cp - base) & ins)) {
+              *cp++ = 0xe1a00000;
+            }
             break;
+
           case DASM_REL_LG:
             CK(n >= 0, UNDEF_LG);
             /* fallthrough */
+
           case DASM_REL_PC:
             CK(n >= 0, UNDEF_PC);
             n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base) - 4;
@@ -451,30 +470,40 @@ int dasm_encode(Dst_DECL, void *buffer) {
               goto patchimml;
             }
             break;
+
           case DASM_LABEL_LG:
             ins &= 2047;
-            if (ins >= 20) D->globals[ins - 10] = (void *)(base + n);
+            if (ins >= 20) {
+              D->globals[ins - 10] = (void *)(base + n);
+            }
             break;
+
           case DASM_LABEL_PC:
             break;
+
           case DASM_IMM:
             cp[-1] |= ((n >> ((ins >> 10) & 31)) & ((1 << ((ins >> 5) & 31)) - 1)) << (ins & 31);
             break;
+
           case DASM_IMM12:
             cp[-1] |= dasm_imm12((unsigned int)n);
             break;
+
           case DASM_IMM16:
             cp[-1] |= ((n & 0xf000) << 4) | (n & 0x0fff);
             break;
+
           case DASM_IMML8:
           patchimml8:
             cp[-1] |= n >= 0 ? (0x00800000 | (n & 0x0f) | ((n & 0xf0) << 4)) : ((-n & 0x0f) | ((-n & 0xf0) << 4));
             break;
+
           case DASM_IMML12:
           case DASM_IMMV8:
           patchimml:
             cp[-1] |= n >= 0 ? (0x00800000 | n) : (-n);
             break;
+
           default:
             *cp++ = ins;
             break;
